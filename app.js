@@ -26,17 +26,24 @@ class StorageService {
   static saveState(state) {
     // TODO: сериализовать state и сохранить в localStorage
     // Пример: localStorage.setItem(STORAGE_KEYS.STATE, JSON.stringify(state));
-    throw new Error("Not implemented: StorageService.saveState");
+    localStorage.setItem(STORAGE_KEYS.STATE, JSON.stringify(state));
   }
 
-  static loadState() {
-    // TODO: прочитать и распарсить состояние, вернуть объект или null
-    throw new Error("Not implemented: StorageService.loadState");
+  static loadState () {
+    const raw = localStorage.getItem(STORAGE_KEYS.STATE);
+
+    if (!raw) return null;
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 
-  static clear() {
+  static clear () {
     // TODO: очистить сохранённое состояние
-    throw new Error("Not implemented: StorageService.clear");
+    localStorage.removeItem(STORAGE_KEYS.STATE);
   }
 }
 
@@ -59,58 +66,96 @@ class QuizEngine {
   get length() {
     return this.questions.length;
   }
-  get currentQuestion() {
+
+  get currentQuestion () {
     return this.questions[this.currentIndex];
   }
 
   /** @param {number} index */
-  goTo(index) {
-    // TODO: валидировать границы и сменить текущий индекс
-    throw new Error("Not implemented: QuizEngine.goTo");
+  goTo (index) {
+    if (index < 0 || index >= this.questions.length) {
+      return;
+    }
+
+    this.currentIndex = index;
   }
 
-  next() {
-    // TODO: перейти к следующему вопросу, если возможно
-    throw new Error("Not implemented: QuizEngine.next");
+  next () {
+    if (this.currentIndex < this.questions.length - 1) {
+      this.currentIndex++;
+    }
   }
 
-  prev() {
-    // TODO: перейти к предыдущему вопросу, если возможно
-    throw new Error("Not implemented: QuizEngine.prev");
+  prev () {
+    if (this.currentIndex > 0) {
+      this.currentIndex--;
+    }
   }
 
   /** @param {number} optionIndex */
   select(optionIndex) {
     // TODO: сохранить выбор пользователя для текущего вопроса
-    throw new Error("Not implemented: QuizEngine.select");
+    this.answers[this.questions[this.currentIndex].id] = optionIndex;
   }
 
-  getSelectedIndex() {
-    // TODO: вернуть выбранный индекс для текущего вопроса (или undefined)
-    throw new Error("Not implemented: QuizEngine.getSelectedIndex");
+  getSelectedIndex () {
+    return this.answers[this.currentQuestion.id];
   }
 
-  tick() {
-    // TODO: декремент таймера; если 0 — завершить тест
-    throw new Error("Not implemented: QuizEngine.tick");
+  tick () {
+    if (this.remainingSec <= 0) {
+      return;
+    }
+
+    this.remainingSec--;
+
+    if (this.remainingSec <= 0) {
+      this.remainingSec = 0;
+      this.finish();
+    }
   }
 
-  finish() {
-    // TODO: зафиксировать завершение и вернуть сводку результата
-    // return { correct: number, total: number, percent: number, passed: boolean }
-    throw new Error("Not implemented: QuizEngine.finish");
+  finish () {
+    let correctAnswersCount = 0;
+
+    this.questions.forEach((question) => {
+      if (this.answers[question.id] === question.correctIndex) {
+        correctAnswersCount++;
+      }
+    });
+
+    this.isFinished = true;
+
+    const percent = correctAnswersCount / this.questions.length;
+
+    return {
+      correct: correctAnswersCount,
+      total: this.questions.length,
+      percent,
+      passed: percent >= this.passThreshold,
+    };
   }
 
   /** Восстановление/выгрузка состояния для localStorage */
-  toState() {
-    // TODO: вернуть сериализуемый снимок состояния
-    throw new Error("Not implemented: QuizEngine.toState");
+  toState () {
+    return {
+      currentIndex: this.currentIndex,
+      answers: this.answers,
+      remainingSec: this.remainingSec,
+      isFinished: this.isFinished,
+    };
   }
 
   /** @param {any} state */
-  static fromState(quiz, state) {
-    // TODO: создать двигатель на базе сохранённого состояния
-    throw new Error("Not implemented: QuizEngine.fromState");
+  static fromState (quiz, state) {
+    const engine = new QuizEngine(quiz);
+
+    engine.currentIndex = state.currentIndex ?? 0;
+    engine.answers = state.answers ?? {};
+    engine.remainingSec = state.remainingSec ?? quiz.timeLimitSec;
+    engine.isFinished = state.isFinished ?? false;
+
+    return engine;
   }
 }
 
@@ -142,6 +187,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   els.title.textContent = quiz.title;
 
   const saved = StorageService.loadState?.(); // заглушка
+
   if (saved) {
     engine = QuizEngine.fromState(quiz, saved);
   } else {
@@ -253,7 +299,7 @@ function renderProgress() {
   }`;
 }
 
-function renderTimer() {
+function renderTimer () {
   const sec = engine.remainingSec ?? 0;
   const m = Math.floor(sec / 60)
     .toString()
@@ -264,7 +310,7 @@ function renderTimer() {
   els.timer.textContent = `${m}:${s}`;
 }
 
-function renderQuestion() {
+function renderQuestion () {
   const q = engine.currentQuestion;
   els.qText.textContent = q.text;
 
@@ -284,6 +330,7 @@ function renderQuestion() {
     input.type = "radio";
     input.name = "option";
     input.value = String(i);
+    
     input.id = id;
     input.checked = engine.getSelectedIndex?.() === i;
 
